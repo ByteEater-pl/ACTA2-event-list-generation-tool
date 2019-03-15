@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html xml:lang="en-GB">
 <head>
-<title>#StopCTA2 event list generation tool</title>
+<title>#StopACTA2 event list generation tool</title>
 <script>
 "use strict"
 <?php
