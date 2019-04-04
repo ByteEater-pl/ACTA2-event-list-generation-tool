@@ -17,7 +17,8 @@ function escape($s) {
 $conn = new mysqli('localhost', 'protester', 'fucktheEU', 'ACTA2');
 $conn->set_charset('utf8');
 if ($_SERVER['REQUEST_METHOD'] == 'POST')
-	if ($_POST['pass'] == 'GuyFawkes')
+	if ($_POST['pass'] == 'GuyFawkes') {
+		$date = str_replace('T', ' ', $_POST['date']) . ':00';
 		if (isset($_POST['link'])) {
 			$i = (int)$_POST['country'];
 			$q = $conn->prepare('SELECT * FROM cities WHERE link = ?');
@@ -26,13 +27,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST')
 				if ($i--)
 					if ($q->num_rows) {
 						$q = $conn->prepare('UPDATE cities SET city = ?, country = ? WHERE link = ?');
-						$q->bind_param('sis', $_POST['city'], $i, $_POST['link']);
+						$q->bind_param('siss', $_POST['city'], $i, $_POST['link'], $_POST['date']);
 						$msg = $q->execute()
 							? "The existing city's data have been updated."
 							: "ERROR: Could not update the existing city's data.";
 					} else {
-						$q = $conn->prepare('INSERT INTO cities VALUES (?, ?, ?)');
-						$q->bind_param('sis', $_POST['city'], $i, $_POST['link']);
+						$q = $conn->prepare('INSERT INTO cities VALUES (?, ?, ?, ?)');
+						$q->bind_param('siss', $_POST['city'], $i, $_POST['link'], $_POST['date']);
 						$msg = $q->execute()
 							? "The new city's data have been saved."
 							: "ERROR: Could not save the new city's data.";
@@ -46,7 +47,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST')
 			else $msg = "ERROR: Failed database lookup for the given city's potential data.";
 		} else {
 			$q = $conn->prepare('UPDATE settings SET date = ?');
-			$date = str_replace('T', ' ', $_POST['date']) . ':00';
 			$q->bind_param('s', $date);
 			$msg = $q->execute()
 				? "The date has been updated."
@@ -57,7 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST')
 				? " The selected country's general section has been updated."
 				: " ERROR: Could not update the selected country's general section.";
 		}
-	else $msg = 'ERROR: Wrong password given. Database unmodified.';
+	} else $msg = 'ERROR: Wrong password given. Database unmodified.';
 $res = $conn->query('SELECT * FROM settings');
 if (!$res) fatal('ERROR: Could not read date from the database.');
 $row = $res->fetch_row();
@@ -75,7 +75,7 @@ if (!$res) fatal('ERROR: Could not read cities from the database.');
 echo ",
 	cities = [";
 while ($row = $res->fetch_row())
-	printf('[`%s`, %u, `%s`],', escape($row[0]), $row[1], escape($row[2]));
+	printf('[`%s`, %u, `%s`, "%s"],', escape($row[0]), $row[1], escape($row[2]), $row[3]);
 ?>
 ],
 	countries = [...[
@@ -119,8 +119,9 @@ onload = () => {
 			$(e).appendChild(new Option(country, i + 1))
 	$("country_first").selectedIndex = 21
 	updateSection()
-	// Here and in the first form's onsubmit an exception will be thrown if the result is out of range.
-	$("date").valueAsNumber = 1000 * date - offset
+	for (const input of document.querySelectorAll("[name=date]"))
+		// Here and in the first form's onsubmit an exception will be thrown if the result is out of range.
+		input.valueAsNumber = 1000 * date - offset
 }
 
 function updateSection() {
@@ -144,10 +145,10 @@ function generate() {
 
 ${country.toUpperCase()}:
 
-` + sortBy(inCountry, c => c[0]).map(([city,, link]) =>
+` + sortBy(inCountry, c => c[0]).map(([city,, link, date]) =>
 	`• ${city}, ${Intl.DateTimeFormat(locales,
 		{month: $("month").value, day: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short"})
-		.format(new Date($("date").valueAsNumber + offset))} – ` + link).join(`
+		.format(new Date(date.replace(" ", "T") + "Z"))} – ` + link).join(`
 
 `)
 	}
@@ -189,8 +190,8 @@ form label {
 <label>General section (before first country) text for selected country (whose changing will overwrite this) or default:
 <textarea id="general" name="general" required="" maxlength="21843"></textarea>
 </label>
-<label>Date and time of the events:
-<input id="date" name="date" type="datetime-local" required=""/>
+<label>Default date and time of the events:
+<input name="date" type="datetime-local" required=""/>
 </label>
 <label>Password (if you wish to use the button):
 <input name="pass" type="password" required=""/>
@@ -223,6 +224,9 @@ form label {
 </label>
 <label>City name:
 <input id="city" name="city" maxlength="63"/>
+</label>
+<label>Date and time:
+<input name="date" type="datetime-local"/>
 </label>
 <label>Link:
 <input name="link" type="url" required="" maxlength="333"/>
